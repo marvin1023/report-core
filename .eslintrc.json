@@ -1,0 +1,21 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
+  "globals": {
+    "__dirname": false,
+    "qq": false,
+    "wx": false,
+    "App": false,
+    "Page": false,
+    "getApp": false,
+    "Component": false,
+    "Behavior": false,
+    "requirePlugin": false,
+    "__wxConfig": false
+  },
+  "rules": {
+    "@typescript-eslint/ban-ts-comment": "off",
+    "@typescript-eslint/no-non-null-assertion": "off"
+  }
+}
