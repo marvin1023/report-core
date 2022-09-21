@@ -27,6 +27,12 @@ interface IRequestData {
     events: IEvent[];
     [k: string]: any;
 }
+interface IAdapterOptions {
+    url: string;
+    data: IRequestData;
+    onReportSuccess(): void;
+    onReportFail(err: Error): void;
+}
 
 declare class ReportCore {
     options: IReportCoreOptions;
@@ -53,4 +59,4 @@ declare class ReportCore {
     cleanEvents(events: IEvent[], type?: 0 | 1): void;
 }
 
-export { ReportCore as default };
+export { IAdapterOptions, IAnyObject, IEvent, IReportCallbackRestOptions, IReportCoreOptions, IReportEventData, IRequestData, ReportCore as default };

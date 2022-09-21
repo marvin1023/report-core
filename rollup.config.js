@@ -6,11 +6,11 @@ import license from 'rollup-plugin-license';
 import { terser } from 'rollup-plugin-terser';
 import dts from 'rollup-plugin-dts';
 
-const input = '.build/index.js';
+// const input = '.build/index.js';
 
 const buildOptions = [
   {
-    input,
+    input: '.build/report.js',
     output: {
       file: pkg.main,
       format: 'umd',
@@ -29,7 +29,7 @@ const buildOptions = [
     ],
   },
   {
-    input,
+    input: '.build/index.js',
     output: {
       dir: './dist/esm',
       format: 'esm',

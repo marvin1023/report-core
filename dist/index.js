@@ -1,7 +1,7 @@
 /**
  * Bundle of report-core
- * Version: 1.0.0
- * Auth:
+ * Version: 1.0.1
+ * Auth: marvin1023
  * Generated: 2022-09-20
  */
 
