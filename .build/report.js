@@ -1,5 +1,4 @@
-import wxAdapter from './adapter/wxAdapter';
-import xhrAdapter from './adapter/xhrAdapter';
+import getDefaultAdapter from './adapter/index';
 class ReportCore {
     constructor(options) {
         this.baseData = {}; // 基础数据
@@ -12,15 +11,14 @@ class ReportCore {
             maxNum: 4,
             intervalTime: 3000,
             eventKey: 'uuid',
-            pollIsOn: true, // 默认开启轮询合并上报
+            pollIsOn: true,
+            adapter: getDefaultAdapter(),
         };
-        if (wx === null || wx === void 0 ? void 0 : wx.request) {
-            defaultOptions.adapter = wxAdapter;
-        }
-        else if (window === null || window === void 0 ? void 0 : window.XMLHttpRequest) {
-            defaultOptions.adapter = xhrAdapter;
-        }
         this.options = Object.assign(defaultOptions, options);
+        if (!this.options.url) {
+            console.error('url is required.');
+            return;
+        }
         if (this.initChild) {
             this.initChild(options);
         }

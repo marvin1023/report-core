@@ -1,6 +1,5 @@
 import { IReportCoreOptions, IAnyObject, IReportEventData, IEvent, IRequestData } from './types';
-import wxAdapter from './adapter/wxAdapter';
-import xhrAdapter from './adapter/xhrAdapter';
+import getDefaultAdapter from './adapter/index';
 
 class ReportCore {
   options!: IReportCoreOptions;
@@ -20,15 +19,15 @@ class ReportCore {
       intervalTime: 3000,
       eventKey: 'uuid',
       pollIsOn: true, // 默认开启轮询合并上报
+      adapter: getDefaultAdapter(),
     };
 
-    if (wx?.request) {
-      defaultOptions.adapter = wxAdapter;
-    } else if (window?.XMLHttpRequest) {
-      defaultOptions.adapter = xhrAdapter;
-    }
-
     this.options = Object.assign(defaultOptions, options);
+
+    if (!this.options.url) {
+      console.error('url is required.');
+      return;
+    }
 
     if (this.initChild) {
       this.initChild(options);
