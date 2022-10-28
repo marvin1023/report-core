@@ -1,20 +1,19 @@
-import { IAdapterOptions } from '../types';
+import { ReportAdapterOptions } from '../types';
 
-const wxAdapter = ({ url, data, onReportSuccess, onReportFail }: IAdapterOptions) => {
+export const wxAdapter = ({ url, data, timeout, onReportSuccess, onReportFail }: ReportAdapterOptions) => {
   wx.request({
     url,
     data,
+    timeout,
     method: 'POST',
     header: {
       'Content-Type': 'application/json;charset=UTF-8',
     },
     success: () => {
-      onReportSuccess();
+      onReportSuccess?.();
     },
     fail: (err: Error) => {
-      onReportFail(err);
+      onReportFail?.(err);
     },
   });
 };
-
-export default wxAdapter;

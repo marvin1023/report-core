@@ -1,41 +1,47 @@
-import { IReportCoreOptions, IAnyObject, IReportEventData, IEvent, IRequestData } from './types';
-import getDefaultAdapter from './adapter/index';
+import {
+  ReportOptions,
+  ReportInstanceOptions,
+  IAnyObject,
+  ReportEventData,
+  ReportEvent,
+  ReportRequestOptions,
+} from './types';
+import { defaultOptions } from './default';
 
-class ReportCore {
-  options!: IReportCoreOptions;
-  baseData: IAnyObject = {}; // 基础数据
+export class Report {
+  options!: ReportInstanceOptions;
+  baseData!: IAnyObject; // 基础数据
   timer?: ReturnType<typeof setTimeout>;
-  unreportEventData: IReportEventData = {}; // 待上报的数据对象
-  reportingEventData: IReportEventData = {}; // 正在上报中的数据对象
-  initChild?(options: IAnyObject): void; // 子类初始化函数
+  unreportEventData: ReportEventData = {}; // 待上报的数据对象
+  reportingEventData: ReportEventData = {}; // 正在上报中的数据对象
 
-  constructor(options: IReportCoreOptions) {
+  constructor(options: ReportOptions) {
     this.init(options);
   }
 
-  init(options: IReportCoreOptions) {
-    const defaultOptions: Omit<IReportCoreOptions, 'url'> = {
-      maxNum: 4,
-      intervalTime: 3000,
-      eventKey: 'uuid',
-      pollIsOn: true, // 默认开启轮询合并上报
-      adapter: getDefaultAdapter(),
-    };
+  init(options: ReportOptions) {
+    // 初始化参数
+    this.initOptions(options);
 
-    this.options = Object.assign(defaultOptions, options);
+    // 初始化基础数据
+    this.initBaseData();
 
-    if (!this.options.url) {
-      console.error('url is required.');
-      return;
-    }
-
-    if (this.initChild) {
-      this.initChild(options);
-    }
-
+    // 自动轮询上报
     if (this.options.pollIsOn) {
       this.pollRun();
     }
+  }
+
+  initOptions(options: ReportOptions) {
+    this.options = Object.assign({}, this.getDefaultOptions(), options) as ReportInstanceOptions;
+  }
+
+  initBaseData() {
+    this.baseData = {};
+  }
+
+  getDefaultOptions() {
+    return defaultOptions;
   }
 
   // 更新 baseData
@@ -46,27 +52,32 @@ class ReportCore {
   pollRun() {
     const { intervalTime } = this.options;
     this.timer = setTimeout(() => {
-      this.send();
+      this.dispatch();
       this.pollRun();
     }, intervalTime);
   }
 
-  pollStop() {
+  pollStop(isStopAndReport?: false) {
     if (this.timer) {
       clearTimeout(this.timer);
     }
+
+    // 把剩余的都上报下
+    if (isStopAndReport) {
+      this.reportAll();
+    }
   }
 
-  send(events: IEvent[] = this.getEvents(), isImmediate = false) {
+  dispatch(events: ReportEvent[] = this.getEvents(), isImmediate = false) {
     const { length } = events;
     if (length === 0) {
       return;
     }
 
-    const maxNum = this.options.maxNum!;
+    const maxNum = this.options.maxNum;
 
     if (length <= maxNum) {
-      this.doSend(events, isImmediate);
+      this.callRequest(events, isImmediate);
       return;
     }
 
@@ -74,36 +85,37 @@ class ReportCore {
     const repeatNum = Math.ceil(length / maxNum);
     for (let i = 0; i < repeatNum; i++) {
       const realEvents = events.slice(i * maxNum, (i + 1) * maxNum);
-      this.doSend(realEvents, isImmediate);
+      this.callRequest(realEvents, isImmediate);
     }
   }
 
-  doSend(events: IEvent[], isImmediate?: boolean) {
-    const data = {
-      ...this.baseData,
-      events,
-    };
+  callRequest(events: ReportEvent[], isImmediate: boolean) {
+    const { backup } = this.options;
 
-    const { url, backup } = this.options;
-
-    this.dispatch(url, data, isImmediate);
+    this.request({ events, isImmediate });
 
     // 如果有备用的，则备用也发送一份，用以校验数据
     if (backup && (!backup.filter || backup.filter(events))) {
-      this.dispatch(backup.url, data, isImmediate);
+      this.request({ url: backup.url, events, isImmediate });
     }
   }
 
-  dispatch(url: string, data: IRequestData, isImmediate = false) {
-    const { adapter, onReportSuccess, onReportFail, onReportBefore } = this.options;
+  request(data: ReportRequestOptions) {
+    const { adapter, onReportSuccess, onReportFail, onReportBefore, eventsKey } = this.options;
+    let { url = this.options.url, isImmediate = false } = data;
     const { events } = data;
 
     if (!url) {
-      throw new Error('please call init before');
+      throw new Error('report url is required');
     }
 
+    let reportData = {
+      ...this.baseData,
+      [eventsKey]: events,
+    };
+
     // onReportBefore 回调可以进行拦截及修改最后的数据
-    const beforeReportReturn = onReportBefore?.(url, data, isImmediate);
+    const beforeReportReturn = onReportBefore?.(url, reportData, isImmediate);
 
     if (beforeReportReturn === false) {
       return;
@@ -111,7 +123,7 @@ class ReportCore {
 
     if (beforeReportReturn && beforeReportReturn.constructor === Object) {
       url = beforeReportReturn.url ?? url;
-      data = beforeReportReturn.data ?? data;
+      reportData = beforeReportReturn.data ?? reportData;
       isImmediate = beforeReportReturn.isImmediate ?? isImmediate;
     }
 
@@ -120,7 +132,7 @@ class ReportCore {
 
     adapter({
       url,
-      data,
+      data: reportData,
       onReportSuccess: () => {
         onReportSuccess?.(events, { requestStartTime, url, isImmediate });
         // 立即上报没有待上报对象和上报中对象，所以不用处理
@@ -141,17 +153,18 @@ class ReportCore {
     });
   }
 
-  report(event: IEvent | IEvent[], isImmediate = false) {
-    const newEvent: IEvent[] = Array.isArray(event) ? event : [event];
+  report(event: ReportEvent | ReportEvent[], isImmediate = false) {
+    const newEvent: ReportEvent[] = Array.isArray(event) ? event : [event];
+    const { eventUUIDKey } = this.options;
 
     newEvent.forEach((item) => {
-      if (!item[this.options.eventKey!]) {
-        item.uuid = this.generateUUID();
+      if (!item[eventUUIDKey]) {
+        item[eventUUIDKey] = this.generateUUID();
       }
     });
 
     if (isImmediate) {
-      this.send(newEvent, true);
+      this.dispatch(newEvent, true);
     } else {
       this.concatEvents(newEvent);
     }
@@ -159,7 +172,7 @@ class ReportCore {
 
   // 页面离开时，将待上报数据统一上报
   reportAll() {
-    this.send();
+    this.dispatch();
   }
 
   generateUUID() {
@@ -174,7 +187,7 @@ class ReportCore {
   getEvents() {
     // 从待上报数据中过滤出来上报中的数据，并返回该数组
     // 同时将待上报的数据加入上报中
-    const res: IEvent[] = [];
+    const res: ReportEvent[] = [];
     // 通过方法获取待上报数据，原因见该方法的注释
     const unreportEventData = this.getUnreportEventData();
     // 通过属性获取上报中数据
@@ -193,20 +206,20 @@ class ReportCore {
     return res;
   }
 
-  concatEvents(newEvents: IEvent[]) {
+  concatEvents(newEvents: ReportEvent[]) {
     if (!newEvents || newEvents.length === 0) {
       return;
     }
     const eventData = this.getUnreportEventData();
     for (const event of newEvents) {
-      const eventId = event[this.options.eventKey!] as string;
+      const eventId = event[this.options.eventUUIDKey];
       eventData[eventId] = event;
     }
     this.setUnreportEventData(eventData);
 
     // 如果大于最大数，则直接调用上报，不用再等 setTimeout 的触发
-    if (Object.keys(eventData).length - Object.keys(this.reportingEventData).length >= this.options.maxNum!) {
-      this.send();
+    if (Object.keys(eventData).length - Object.keys(this.reportingEventData).length >= this.options.maxNum) {
+      this.dispatch();
     }
   }
 
@@ -220,7 +233,7 @@ class ReportCore {
   }
 
   // 根据上报的成功或失败，删除待上报或上报中的数据
-  cleanEvents(events: IEvent[], type: 0 | 1 = 0) {
+  cleanEvents(events: ReportEvent[], type: 0 | 1 = 0) {
     // type 为 0 表示只清除上报中的数据，用于上报失败的时候
     // 为 1 表示清除待上报及上报中的数据，用于上报成功的时候
 
@@ -228,7 +241,7 @@ class ReportCore {
     const { reportingEventData } = this;
 
     events.forEach((item) => {
-      const key = item[this.options.eventKey!] as string;
+      const key = item[this.options.eventUUIDKey] as string;
       if (reportingEventData[key]) {
         delete reportingEventData[key];
       }
@@ -244,5 +257,3 @@ class ReportCore {
     }
   }
 }
-
-export default ReportCore;

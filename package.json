@@ -1,6 +1,6 @@
 {
   "name": "report-core",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "数据上报基础库",
   "type": "module",
   "miniprogram": "dist",
@@ -8,16 +8,16 @@
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
   "files": [
-    "src",
-    "dist",
-    "package.json",
-    "README.md"
+    "dist"
   ],
   "sideEffects": false,
   "scripts": {
     "lint": "lint-staged",
-    "clean": "rimraf dist && rimraf .build",
-    "build": "npm run clean && tsc && rollup -c ./rollup.config.js",
+    "clean": "rimraf dist",
+    "build:esm": "rollup -c rollup.config.esm.js",
+    "build:dts": "tsc --emitDeclarationOnly --declaration --project tsconfig.json --outDir dist/esm",
+    "build:umd": "rollup -c rollup.config.umd.js",
+    "build": "npm run clean && npm run build:esm && npm run build:dts && npm run build:umd",
     "release": "standard-version && npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky install"
@@ -36,6 +36,9 @@
   "author": "marvin1023",
   "license": "ISC",
   "devDependencies": {
+    "@babel/core": "^7.19.6",
+    "@babel/preset-env": "^7.19.4",
+    "@rollup/plugin-babel": "^6.0.2",
     "@rollup/plugin-typescript": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^5.30.0",
     "@typescript-eslint/parser": "^5.30.0",
@@ -47,9 +50,11 @@
     "rimraf": "^3.0.2",
     "rollup": "^2.75.7",
     "rollup-plugin-dts": "^4.2.2",
+    "rollup-plugin-esbuild": "^4.10.1",
     "rollup-plugin-license": "^2.8.1",
     "rollup-plugin-terser": "^7.0.2",
     "standard-version": "^9.5.0",
-    "typescript": "^4.7.4"
+    "typescript": "^4.7.4",
+    "vite": "^3.2.0"
   }
 }
