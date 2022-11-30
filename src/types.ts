@@ -1,12 +1,12 @@
 export type IAnyObject = Record<string, any>;
 
-export interface ReportEvent {
+export interface IReportEvent {
   uuid?: string;
   [k: string]: any;
 }
 
 export interface ReportRequestData {
-  events?: ReportEvent[];
+  events?: IReportEvent[];
   [k: string]: any;
 }
 
@@ -21,15 +21,15 @@ export type ReportBeforeCallback = (
   data: ReportRequestData,
   isImmediate: boolean,
 ) => void | false | ReportRequestData;
-export type ReportSuccessCallback = (events: ReportEvent[], rest: ReportCallbackRestOptions) => void;
-export type ReportFailCallback = (err: Error, events: ReportEvent[], rest: ReportCallbackRestOptions) => void;
+export type ReportSuccessCallback = (events: IReportEvent[], rest: ReportCallbackRestOptions) => void;
+export type ReportFailCallback = (err: Error, events: IReportEvent[], rest: ReportCallbackRestOptions) => void;
 export interface ReportBackupOptions {
   url: string;
-  filter?: (events: ReportEvent[]) => boolean;
+  filter?: (events: IReportEvent[]) => boolean;
 }
 
-export interface ReportInstanceOptions {
-  url: string;
+export interface IReportConfig {
+  isOn: boolean; // 上报是否开启，如果没有开启，则所有的合并上报都不会上报
   intervalTime: number; // 合并上报的间隔时间
   pollIsOn: boolean; // 合并上报轮询开启状态
   maxNum: number; // 一次上报最多包括几条数据
@@ -42,11 +42,15 @@ export interface ReportInstanceOptions {
   backup?: ReportBackupOptions;
   [k: string]: any;
 }
-export interface ReportOptions extends Partial<ReportInstanceOptions> {
+export interface IReportInitOptions extends Partial<IReportConfig> {
   url: string;
 }
 
-export type ReportEventData = Record<string, ReportEvent>;
+export interface IReportInstanceOptions extends IReportConfig {
+  url: string;
+}
+
+export type IReportEventData = Record<string, IReportEvent>;
 
 export interface ReportAdapterOptions {
   url: string;
@@ -56,8 +60,8 @@ export interface ReportAdapterOptions {
   onReportFail?(err: Error): void;
 }
 
-export interface ReportRequestOptions {
-  events: ReportEvent[];
+export interface IReportRequestOptions {
+  events: IReportEvent[];
   url?: string;
   isImmediate?: boolean;
 }

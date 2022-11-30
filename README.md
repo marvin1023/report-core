@@ -5,6 +5,7 @@
 ## 功能
 
 - 支持立即上报及合并上报两种；
+- 支持延迟上报，先设置 `isOn` 为 false，则只会合并并不上报。
 - 支持合并上报轮询的开启及停止；
 - 支持自定义合并上报的最大数据量，防止一次上报数据太大，导致可能失败；
 - 支持上报拦截及修改；
@@ -28,20 +29,27 @@ npm i report-core --save
 ```js
 // reporter.ts
 // --------------------------------------
-import { Report, ReportEvent } from 'report-core';
+import { Report, IReportEvent, IReportConfig } from 'report-core';
 
 // 默认参数如下：
 // {
+//   isOn: true, // 默认合并上报达到条件将会自动上报
 //   maxNum: 4, // 一次上报最多包括几条数据，当未上报数据大于该值时，会自动触发上报，且上报时会以此为分割，防止一次上报数据过大造成失败
-//   intervalTime: 3000, // setTimeout 执行上报的间隔时间
+//   pollIsOn: true, // 默认开启轮询合并上报
+//   intervalTime: 3000, // 轮询 setTimeout 执行上报的间隔时间
 //   eventUUIDKey: 'uuid', // 每条上报数据的唯一 key，默认会自动生成 uuid 作为 key 值，如果指定该值，则以上报数据中该值为 key
 //   eventsKey: 'events', // 数据数组字段，详见下面上报数据说明
-//   pollIsOn: true, // 默认开启轮询合并上报
 //   requestTimeout: 16000, // 16s 超时失败
 //   adapter: getDefaultAdapter(), // 自动适配 WEB 还是小程序发送请求
 // };
 
-// 参数类型为：ReportOptions，见下面说明
+// 修改 config
+const config: IReportConfig = {
+  isOn: false,
+};
+Report.setConfig(config);
+
+// 参数类型为：IReportInitOptions，见下面说明
 const reporter = new Report({
   url: 'xxx',
 });
@@ -89,15 +97,11 @@ reporter.report([fakeEvent1, fakeEvent2]);
 reporter.reportAll();
 ```
 
-** ReportOptions 参数类型说明**
+** IReportInitOptions 参数类型说明**
 
 ```ts
-export interface ReportOptions extends Partial<ReportInstanceOptions> {
-  url: string;
-}
-
-export interface ReportInstanceOptions {
-  url: string;
+export interface IReportConfig {
+  isOn: boolean; // 上报是否开启，如果没有开启，则所有的合并上报都不会上报
   intervalTime: number; // 合并上报的间隔时间
   pollIsOn: boolean; // 合并上报轮询开启状态
   maxNum: number; // 一次上报最多包括几条数据
@@ -110,17 +114,20 @@ export interface ReportInstanceOptions {
   backup?: ReportBackupOptions;
   [k: string]: any;
 }
+export interface IReportInitOptions extends Partial<IReportConfig> {
+  url: string;
+}
 
 export type ReportBeforeCallback = (
   url: string,
   data: ReportRequestData,
   isImmediate: boolean,
 ) => void | false | ReportRequestData;
-export type ReportSuccessCallback = (events: ReportEvent[], rest: ReportCallbackRestOptions) => void;
-export type ReportFailCallback = (err: Error, events: ReportEvent[], rest: ReportCallbackRestOptions) => void;
+export type ReportSuccessCallback = (events: IReportEvent[], rest: ReportCallbackRestOptions) => void;
+export type ReportFailCallback = (err: Error, events: IReportEvent[], rest: ReportCallbackRestOptions) => void;
 export interface ReportBackupOptions {
   url: string;
-  filter?: (events: ReportEvent[]) => boolean;
+  filter?: (events: IReportEvent[]) => boolean;
 }
 ```
 
@@ -135,7 +142,7 @@ export interface ReportBackupOptions {
 ```ts
 // 数据组字段默认是 events，可以通过实例化时设置 eventsKey 进行自定义
 export interface ReportRequestData {
-  events?: ReportEventEvent[]; // 需要上报的数据数组，可能是1条，也可能是多条的合并
+  events?: IReportEvent[]; // 需要上报的数据数组，可能是1条，也可能是多条的合并
   [k: string]: any; // baseData 的各个数据，如机型，版本号等
 }
 ```
@@ -143,17 +150,17 @@ export interface ReportRequestData {
 ### 一次 report 方法调用的数据
 
 ```ts
-import { ReportEvent } from 'report-core';
+import { IReportEvent } from 'report-core';
 import reporter from './reporter';
 
-reporter.report(event: ReportEvent | ReportEvent[], isImmediate = false){}
+reporter.report(event: IReportEvent | IReportEvent[], isImmediate = false){}
 ```
 
-`ReportEvent` 类型如下：
+`IReportEvent` 类型如下：
 
 ```ts
 // 唯一 key 字段默认为 uuid，可以通过实例化时设置 eventUUIDKey 进行自定义
-export interface ReportEvent {
+export interface IReportEvent {
   uuid?: string; // 默认每条数据的唯一 key
   [k: string]: any;
 }
@@ -167,6 +174,7 @@ PS：如果 report 参数 `event` 不是数组，默认会自动转成数组 `[e
 
 - 待上报数据超过 maxNum（默认为 4），执行上报。同时如果一次上报数据超过 maxNum，将进行切割上报。
 - 轮询每隔 intervalTime（默认为 3s）， 执行上报。
+- 如果 `Report.defaultConfig.isOn` 的值为 false，则合并上报只合并数据，并不进行上报。
 
 ### 合并上报涉及的数据
 
@@ -195,7 +203,7 @@ reporter.getUnreportEventData = () => {
 ### 备份上报
 
 ```ts
-import { Report, ReportEvent } from 'report-core';
+import { Report, IReportEvent } from 'report-core';
 
 const reporter = new Report({
   url: 'xxx',
@@ -235,7 +243,7 @@ const reporter = new Report({
 ### 不启动自动轮询上报
 
 ```ts
-import { Report, ReportEvent } from 'report-core';
+import { Report, IReportEvent } from 'report-core';
 
 const reporter = new Report({
   url: 'xxx',

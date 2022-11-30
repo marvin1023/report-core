@@ -1,6 +1,6 @@
 {
   "name": "report-core",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "数据上报基础库",
   "type": "module",
   "miniprogram": "dist",

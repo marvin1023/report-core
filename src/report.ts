@@ -1,25 +1,32 @@
 import {
-  ReportOptions,
-  ReportInstanceOptions,
+  IReportInitOptions,
+  IReportInstanceOptions,
+  IReportConfig,
   IAnyObject,
-  ReportEventData,
-  ReportEvent,
-  ReportRequestOptions,
+  IReportEventData,
+  IReportEvent,
+  IReportRequestOptions,
 } from './types';
-import { defaultOptions } from './default';
+import { defaultConfig } from './default';
 
 export class Report {
-  options!: ReportInstanceOptions;
+  static config: IReportConfig = { ...defaultConfig };
+
+  static setConfig = (config: IReportConfig) => {
+    Object.assign(Report.config, config);
+  };
+
+  options!: IReportInstanceOptions;
   baseData!: IAnyObject; // 基础数据
   timer?: ReturnType<typeof setTimeout>;
-  unreportEventData: ReportEventData = {}; // 待上报的数据对象
-  reportingEventData: ReportEventData = {}; // 正在上报中的数据对象
+  unreportEventData: IReportEventData = {}; // 待上报的数据对象
+  reportingEventData: IReportEventData = {}; // 正在上报中的数据对象
 
-  constructor(options: ReportOptions) {
+  constructor(options: IReportInitOptions) {
     this.init(options);
   }
 
-  init(options: ReportOptions) {
+  init(options: IReportInitOptions) {
     // 初始化参数
     this.initOptions(options);
 
@@ -32,16 +39,12 @@ export class Report {
     }
   }
 
-  initOptions(options: ReportOptions) {
-    this.options = Object.assign({}, this.getDefaultOptions(), options) as ReportInstanceOptions;
+  initOptions(options: IReportInitOptions) {
+    this.options = Object.assign({}, Report.config, options);
   }
 
   initBaseData() {
     this.baseData = {};
-  }
-
-  getDefaultOptions() {
-    return defaultOptions;
   }
 
   // 更新 baseData
@@ -52,7 +55,9 @@ export class Report {
   pollRun() {
     const { intervalTime } = this.options;
     this.timer = setTimeout(() => {
-      this.dispatch();
+      if (Report.config.isOn) {
+        this.dispatch();
+      }
       this.pollRun();
     }, intervalTime);
   }
@@ -68,7 +73,7 @@ export class Report {
     }
   }
 
-  dispatch(events: ReportEvent[] = this.getEvents(), isImmediate = false) {
+  dispatch(events: IReportEvent[] = this.getEvents(), isImmediate = false) {
     const { length } = events;
     if (length === 0) {
       return;
@@ -89,7 +94,7 @@ export class Report {
     }
   }
 
-  callRequest(events: ReportEvent[], isImmediate: boolean) {
+  callRequest(events: IReportEvent[], isImmediate: boolean) {
     const { backup } = this.options;
 
     this.request({ events, isImmediate });
@@ -100,7 +105,7 @@ export class Report {
     }
   }
 
-  request(data: ReportRequestOptions) {
+  request(data: IReportRequestOptions) {
     const { adapter, onReportSuccess, onReportFail, onReportBefore, eventsKey } = this.options;
     let { url = this.options.url, isImmediate = false } = data;
     const { events } = data;
@@ -153,12 +158,13 @@ export class Report {
     });
   }
 
-  report(event: ReportEvent | ReportEvent[], isImmediate = false) {
-    const newEvent: ReportEvent[] = Array.isArray(event) ? event : [event];
+  report<T extends IReportEvent>(event: T | T[], isImmediate = false) {
+    const newEvent: T[] = Array.isArray(event) ? event : [event];
     const { eventUUIDKey } = this.options;
 
     newEvent.forEach((item) => {
       if (!item[eventUUIDKey]) {
+        // @ts-ignore
         item[eventUUIDKey] = this.generateUUID();
       }
     });
@@ -175,19 +181,22 @@ export class Report {
     this.dispatch();
   }
 
-  generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c == 'x' ? r : (r & 0x3) | 0x8;
-
-      return v.toString(16);
-    });
+  generateUUID(bytes = 16) {
+    const SHARED_CHAR_CODES_ARRAY = Array(32);
+    for (let i = 0; i < bytes * 2; i++) {
+      SHARED_CHAR_CODES_ARRAY[i] = Math.floor(Math.random() * 16) + 48;
+      // valid hex characters in the range 48-57 and 97-102
+      if (SHARED_CHAR_CODES_ARRAY[i] >= 58) {
+        SHARED_CHAR_CODES_ARRAY[i] += 39;
+      }
+    }
+    return String.fromCharCode.apply(null, SHARED_CHAR_CODES_ARRAY.slice(0, bytes * 2));
   }
 
   getEvents() {
     // 从待上报数据中过滤出来上报中的数据，并返回该数组
     // 同时将待上报的数据加入上报中
-    const res: ReportEvent[] = [];
+    const res: IReportEvent[] = [];
     // 通过方法获取待上报数据，原因见该方法的注释
     const unreportEventData = this.getUnreportEventData();
     // 通过属性获取上报中数据
@@ -206,7 +215,7 @@ export class Report {
     return res;
   }
 
-  concatEvents(newEvents: ReportEvent[]) {
+  concatEvents(newEvents: IReportEvent[]) {
     if (!newEvents || newEvents.length === 0) {
       return;
     }
@@ -216,6 +225,11 @@ export class Report {
       eventData[eventId] = event;
     }
     this.setUnreportEventData(eventData);
+
+    // 如果没有开启，则不会上报
+    if (Report.config.isOn) {
+      return;
+    }
 
     // 如果大于最大数，则直接调用上报，不用再等 setTimeout 的触发
     if (Object.keys(eventData).length - Object.keys(this.reportingEventData).length >= this.options.maxNum) {
@@ -233,7 +247,7 @@ export class Report {
   }
 
   // 根据上报的成功或失败，删除待上报或上报中的数据
-  cleanEvents(events: ReportEvent[], type: 0 | 1 = 0) {
+  cleanEvents(events: IReportEvent[], type: 0 | 1 = 0) {
     // type 为 0 表示只清除上报中的数据，用于上报失败的时候
     // 为 1 表示清除待上报及上报中的数据，用于上报成功的时候
 
